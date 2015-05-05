@@ -15,11 +15,12 @@ from django.core.urlresolvers import reverse
 from django.core.exceptions import ImproperlyConfigured
 from oauth2_provider.tests.factories import ClientFactory
 from provider.oauth2.models import Client
-from xmodule.tabs import EdxNotesTab
 from xmodule.modulestore.tests.factories import CourseFactory, ItemFactory
 from xmodule.modulestore.tests.django_utils import ModuleStoreTestCase
 from xmodule.modulestore import ModuleStoreEnum
 from xmodule.modulestore.django import modulestore
+from xmodule.tabs import CourseTab
+from xmodule.tests.test_tabs import TabTestCase
 from courseware.model_data import FieldDataCache
 from courseware.module_render import get_module_for_descriptor
 from student.tests.factories import UserFactory
@@ -29,7 +30,7 @@ def enable_edxnotes_for_the_course(course, user_id):
     """
     Enable EdxNotes for the course.
     """
-    course.tabs.append(EdxNotesTab())
+    course.tabs.append(CourseTab.from_json({ "type": "edxnotes", "name": "Notes"}))
     modulestore().update_item(course, user_id)
 
 
@@ -973,3 +974,37 @@ class EdxNotesViewsTest(ModuleStoreTestCase):
             content_type="application/json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class EdxNotesTestCase(TabTestCase):
+    """
+    Test cases for Notes Tab.
+    """
+
+    def check_edxnotes_tab(self):
+        """
+        Helper function for verifying the edxnotes tab.
+        """
+        return self.check_tab(
+            tab_class=tabs.EdxNotesTab,
+            dict_tab={'type': tabs.EdxNotesTab.type, 'name': 'same'},
+            expected_link=self.reverse('edxnotes', args=[self.course.id.to_deprecated_string()]),
+            expected_tab_id=tabs.EdxNotesTab.type,
+            invalid_dict_tab=self.fake_dict_tab,
+        )
+
+    def test_edxnotes_tabs_enabled(self):
+        """
+        Tests that edxnotes tab is shown when feature is enabled.
+        """
+        self.settings.FEATURES['ENABLE_EDXNOTES'] = True
+        tab = self.check_edxnotes_tab()
+        self.check_can_display_results(tab, for_authenticated_users_only=True)
+
+    def test_edxnotes_tabs_disabled(self):
+        """
+        Tests that edxnotes tab is not shown when feature is disabled.
+        """
+        self.settings.FEATURES['ENABLE_EDXNOTES'] = False
+        tab = self.check_edxnotes_tab()
+        self.check_can_display_results(tab, expected_value=False)
